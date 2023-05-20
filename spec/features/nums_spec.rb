@@ -3,11 +3,11 @@ require 'rails_helper'
 
 describe '/nums' do
   subject do
-    res_page val, key
+    res_page val, idempotency_key
   end
 
-  def res_page(val, key)
-    visit "http://localhost:3000/nums?val=#{val}&idempotency_key=#{key}"
+  def res_page(val, idempotency_key)
+    visit "/nums?val=#{val}&idempotency_key=#{idempotency_key}"
 
     page
   end
@@ -17,7 +17,7 @@ describe '/nums' do
   end
 
   let(:val) { nil }
-  let(:key) { nil }
+  let(:idempotency_key) { nil }
 
   context 'without params' do
     it { expect(subject.body).to eq "0" }
@@ -26,17 +26,18 @@ describe '/nums' do
 
   context 'with params' do
     let(:val) { 5 }
-    let(:key) { rand_key }
+    let(:idempotency_key) { rand_key }
 
     it { expect(subject.body).to eq val.to_s }
     it { expect(subject.status_code).to eq 201 }
 
     context 'one more time' do
       context 'with same params' do
-        before { res_page val, key }
+        before { res_page val, idempotency_key }
 
-        it { expect(page.body).to eq val.to_s }
-        it { expect(page.status_code).to eq 200 }
+        it { expect(subject.body).to eq val.to_s }
+        it { expect(subject.status_code).to eq 200 }
+
       end
 
       context 'different params' do
@@ -45,8 +46,21 @@ describe '/nums' do
 
         before { res_page val2, key2 }
 
-        it { expect(page.body).to eq (val + val2).to_s }
-        it { expect(page.status_code).to eq 201 }
+        it { expect(subject.body).to eq (val + val2).to_s }
+        it { expect(subject.status_code).to eq 201 }
+      end
+    end
+
+    context 'parallel running with same params' do
+      it 'store value once' do
+        expect do
+          threads = 4.times.map do
+            Thread.new { res_page(val, idempotency_key).body }
+          end
+
+          threads.map(&:join).map(&:value)
+        end
+          .to change(Num, :count).by 1
       end
     end
   end
