@@ -2,15 +2,16 @@
 module IdempotencyKeys
   KEY_STORE_TTL = 1.day
 
-  def idempotency_key_ok?(key)
-    return false if key.blank?
-    return false if keys_store.get key
-
-    true
+  def idempotency_key_ok?
+    keys_store.set idempotency_key, 'wait', ex: KEY_STORE_TTL, nx: true
   end
 
-  def mark_idempotency_key(key)
-    keys_store.setex(key, KEY_STORE_TTL, 1)
+  def get_total_by_key
+    keys_store.get idempotency_key
+  end
+
+  def store_value_for_idempotency_key
+    keys_store.setex(idempotency_key, KEY_STORE_TTL, @total)
   end
 
   def keys_store

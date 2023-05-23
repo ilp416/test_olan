@@ -32,6 +32,9 @@ describe '/nums' do
     it { expect(subject.status_code).to eq 201 }
 
     context 'one more time' do
+      let(:val2) { 8 }
+      let(:key2) { rand_key }
+
       context 'with same params' do
         before { res_page val, idempotency_key }
 
@@ -41,13 +44,19 @@ describe '/nums' do
       end
 
       context 'different params' do
-        let(:val2) { 8 }
-        let(:key2) { rand_key }
-
         before { res_page val2, key2 }
 
         it { expect(subject.body).to eq (val + val2).to_s }
         it { expect(subject.status_code).to eq 201 }
+
+      end
+
+      context 'with different and with same params' do
+        before { res_page val, idempotency_key }
+        before { res_page val2, key2 }
+
+        it { expect(subject.body).to eq val.to_s }
+        it { expect(subject.status_code).to eq 200 }
       end
     end
 

@@ -4,33 +4,28 @@ class NumsController < ApplicationController
   include IdempotencyKeys
 
   def index
-    if idempotency_key_ok? && params[:val].present?
-      Num.transaction(requires_new: true) do
-        @num = Num.create value: params[:val]
-        raise ActiveRecord::Rollback unless idempotency_key_ok?
-        mark_idempotency_key idempotency_key
-      end
+    if params[:val].present? && idempotency_key.present?
+      store_data if idempotency_key_ok?
+      @total ||= get_total_by_key
     end
 
-    render plain: current_total, status: status
+    render plain: @total || Num.all.sum(:value),
+           status: status
   end
 
   private
+
+  def store_data
+    @num = Num.create value: params[:val]
+    @total = Num.where('id <= ?', @num.id).sum(:value)
+    store_value_for_idempotency_key
+  end
 
   def status
     @num.present? ? :created : :ok
   end
   
-  def current_total
-    scope = @num.present? ? Num.where('id <= ?', @num.id) : Num.all
-    scope.sum(:value)
-  end
-
   def idempotency_key
     params[:idempotency_key]
-  end
-
-  def idempotency_key_ok?
-    super idempotency_key
   end
 end
